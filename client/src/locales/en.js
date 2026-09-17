@@ -6,6 +6,7 @@ export default {
     orders: 'Orders',
     finance: 'Finance',
     demandForecast: 'Demand Forecast',
+    restocking: 'Restocking',
     companyName: 'Catalyst Components',
     subtitle: 'Inventory Management System'
   },
@@ -105,6 +106,8 @@ export default {
   orders: {
     title: 'Orders',
     description: 'View and manage customer orders',
+    submittedOrders: 'Submitted Restock Orders',
+    noSubmittedOrders: 'No restocking orders have been submitted yet.',
     allOrders: 'All Orders',
     totalOrders: 'Total Orders',
     totalRevenue: 'Total Revenue',
@@ -125,7 +128,8 @@ export default {
       totalValue: 'Total Value',
       status: 'Status',
       expectedDelivery: 'Expected Delivery',
-      actualDelivery: 'Actual Delivery'
+      actualDelivery: 'Actual Delivery',
+      leadTime: 'Lead Time'
     }
   },
 
@@ -189,6 +193,46 @@ export default {
   },
 
   // Filters
+  // Restocking
+  restocking: {
+    title: 'Restocking',
+    description: 'Allocate a budget and generate restock recommendations from the demand forecast',
+    budget: 'Available Budget',
+    warehouse: 'Warehouse',
+    allocated: 'Allocated',
+    remaining: 'Remaining Budget',
+    itemsRecommended: 'Items Recommended',
+    itemsWithShortfall: 'Items Below Forecast',
+    leadTime: 'Lead Time',
+    recommendations: 'Recommended Restock Lines',
+    noRecommendations: 'No items can be restocked with the current budget. Increase the budget to see recommendations.',
+    noShortfall: 'All forecasted items are fully stocked in this warehouse.',
+    partialFill: 'Partial',
+    placeOrder: 'Place Order',
+    confirmTitle: 'Confirm Restock Order',
+    confirmDescription: 'Review the lines below. The order will be submitted to the {warehouse} warehouse with an estimated lead time of {days} days.',
+    confirm: 'Confirm Order',
+    submitting: 'Submitting...',
+    orderSubmitted: 'Order {orderNumber} submitted. Expected delivery {date} ({days} days lead time).',
+    viewOrders: 'View in Orders',
+    submitError: 'Failed to submit restocking order',
+    loadError: 'Failed to load recommendations',
+    table: {
+      sku: 'SKU',
+      item: 'Item',
+      category: 'Category',
+      onHand: 'On Hand',
+      forecast: 'Forecast',
+      shortfall: 'Shortfall',
+      unitCost: 'Unit Cost',
+      recommendedQty: 'Recommended Qty',
+      lineCost: 'Line Cost',
+      trend: 'Trend',
+      quantity: 'Qty',
+      total: 'Total'
+    }
+  },
+
   filters: {
     timePeriod: 'Time Period',
     location: 'Location',
@@ -204,6 +248,7 @@ export default {
     shipped: 'Shipped',
     processing: 'Processing',
     backordered: 'Backordered',
+    submitted: 'Submitted',
     inStock: 'In Stock',
     lowStock: 'Low Stock',
     adequate: 'Adequate'
@@ -323,6 +368,7 @@ export default {
     search: 'Search',
     filter: 'Filter',
     export: 'Export',
-    items: 'items'
+    items: 'items',
+    daysCount: '{days} days'
   }
 }
