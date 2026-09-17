@@ -1,0 +1,39 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      # id-token is what lets the action post as itself rather than via a PAT.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request, focusing on:
+            - Code quality and adherence to the patterns in CLAUDE.md
+            - Potential bugs, especially unvalidated dates and v-for keys
+            - Pydantic models kept in sync with the JSON data shape
+            - Security implications and secrets accidentally committed
+
+            The PR branch is already checked out in the working directory.
+            Use `gh pr comment` for top-level feedback, and
+            `mcp__github_inline_comment__create_inline_comment` (with
+            `confirmed: true`) to flag specific lines. Only post GitHub
+            comments -- do not return the review as a chat message.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
