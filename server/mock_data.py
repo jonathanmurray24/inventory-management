@@ -37,3 +37,8 @@ purchase_orders = load_json_file('purchase_orders.json')
 
 # All data is now loaded from JSON files in the data/ directory
 # This allows for easier maintenance and updates of the sample data
+
+# Restock orders created at runtime via POST /api/restock-orders.
+# Module-level so main.py and tests share one list; mutate in place (append/clear), never rebind,
+# otherwise the test reset fixture and the API would end up holding different lists.
+restock_orders = []

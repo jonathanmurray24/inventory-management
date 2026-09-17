@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
-from pydantic import BaseModel
-from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders
+from pydantic import BaseModel, Field
+from datetime import datetime, timedelta
+from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders, restock_orders
 
 app = FastAPI(title="Factory Inventory Management System")
 
@@ -13,6 +14,14 @@ QUARTER_MAP = {
     'Q3-2025': ['2025-07', '2025-08', '2025-09'],
     'Q4-2025': ['2025-10', '2025-11', '2025-12']
 }
+
+# Delivery lead time per destination warehouse, in days (fixed for the demo)
+LEAD_TIME_DAYS = {
+    'San Francisco': 5,
+    'London': 10,
+    'Tokyo': 14
+}
+RESTOCK_CUSTOMER = "Internal Restock"
 
 def filter_by_month(items: list, month: Optional[str]) -> list:
     """Filter items by month/quarter based on order_date field"""
@@ -45,6 +54,76 @@ def apply_filters(items: list, warehouse: Optional[str] = None, category: Option
         filtered = [item for item in filtered if item.get('status', '').lower() == status.lower()]
 
     return filtered
+
+def build_restock_recommendations(budget: float, warehouse: Optional[str] = None) -> dict:
+    """Greedy budget allocation: restock forecast items with the largest shortfall first.
+
+    Shortfall is forecasted_demand minus quantity_on_hand. Increasing-trend items are
+    prioritised because their shortfall will only grow; within a trend group larger
+    shortfalls come first. The budget is spent in that order until it runs out, and the
+    item that exhausts it receives a partial quantity.
+    """
+    # Forecasts are keyed by SKU. Each forecast SKU currently maps to exactly one inventory
+    # record, so one inventory row yields at most one candidate line.
+    # Round once so the echoed budget, total_cost and remaining_budget always add up exactly
+    budget = round(budget, 2)
+    forecast_by_sku = {f['item_sku']: f for f in demand_forecasts}
+
+    candidates = []
+    for item in apply_filters(inventory_items, warehouse):
+        forecast = forecast_by_sku.get(item['sku'])
+        if not forecast:
+            continue
+        shortfall = forecast['forecasted_demand'] - item['quantity_on_hand']
+        # Fully stocked items and zero-cost items (would divide by zero below) are skipped
+        if shortfall <= 0 or item['unit_cost'] <= 0:
+            continue
+        candidates.append({
+            'sku': item['sku'],
+            'name': item['name'],
+            'category': item['category'],
+            'warehouse': item['warehouse'],
+            'quantity_on_hand': item['quantity_on_hand'],
+            'forecasted_demand': forecast['forecasted_demand'],
+            'shortfall': shortfall,
+            'unit_cost': item['unit_cost'],
+            'trend': forecast['trend']
+        })
+
+    # False sorts before True, so increasing-trend items come first; then largest shortfall
+    candidates.sort(key=lambda c: (c['trend'] != 'increasing', -c['shortfall']))
+    total_shortfall_cost = round(sum(c['shortfall'] * c['unit_cost'] for c in candidates), 2)
+
+    # Work in integer cents so floor division is not corrupted by float rounding
+    remaining_cents = round(budget * 100)
+    lines = []
+    for c in candidates:
+        unit_cents = round(c['unit_cost'] * 100)
+        # Partial fill: buy as many units as the remaining budget allows, capped at the shortfall
+        qty = min(c['shortfall'], remaining_cents // unit_cents)
+        if qty <= 0:
+            # Too expensive for what is left; a cheaper item later in the list may still fit
+            continue
+        remaining_cents -= qty * unit_cents
+        lines.append({
+            **c,
+            'recommended_qty': qty,
+            'line_cost': qty * unit_cents / 100,
+            'partial': qty < c['shortfall']
+        })
+        if remaining_cents == 0:
+            break
+
+    return {
+        'budget': budget,
+        'warehouse': warehouse if warehouse and warehouse != 'all' else 'all',
+        'lead_time_days': LEAD_TIME_DAYS.get(warehouse),
+        'lines': lines,
+        'total_cost': round(budget - remaining_cents / 100, 2),
+        'remaining_budget': remaining_cents / 100,
+        'total_shortfall_cost': total_shortfall_cost,
+        'items_with_shortfall': len(candidates)
+    }
 
 # CORS middleware
 app.add_middleware(
@@ -121,6 +200,58 @@ class CreatePurchaseOrderRequest(BaseModel):
     notes: Optional[str] = None
 
 # API endpoints
+class RestockLine(BaseModel):
+    sku: str
+    name: str
+    category: str
+    warehouse: str
+    quantity_on_hand: int
+    forecasted_demand: int
+    shortfall: int
+    unit_cost: float
+    recommended_qty: int
+    line_cost: float
+    trend: str
+    partial: bool
+
+class RestockRecommendations(BaseModel):
+    budget: float
+    warehouse: str
+    lead_time_days: Optional[int] = None
+    lines: List[RestockLine]
+    total_cost: float
+    remaining_budget: float
+    total_shortfall_cost: float
+    items_with_shortfall: int
+
+class RestockOrderItemRequest(BaseModel):
+    sku: str
+    quantity: int = Field(..., gt=0)
+
+class CreateRestockOrderRequest(BaseModel):
+    warehouse: str
+    items: List[RestockOrderItemRequest] = Field(..., min_length=1)
+
+class RestockOrderItem(BaseModel):
+    sku: str
+    name: str
+    quantity: int
+    # Named unit_price (not unit_cost) to match Order.items so the Orders view renders both alike
+    unit_price: float
+    line_cost: float
+
+class RestockOrder(BaseModel):
+    id: str
+    order_number: str
+    customer: str
+    warehouse: str
+    items: List[RestockOrderItem]
+    status: str
+    order_date: str
+    lead_time_days: int
+    expected_delivery: str
+    total_value: float
+
 @app.get("/")
 def root():
     return {"message": "Factory Inventory Management System API", "version": "1.0.0"}
@@ -165,6 +296,67 @@ def get_order(order_id: str):
 def get_demand_forecasts():
     """Get demand forecasts"""
     return demand_forecasts
+
+@app.get("/api/restock/recommendations", response_model=RestockRecommendations)
+def get_restock_recommendations(
+    budget: float = Query(..., ge=0),
+    warehouse: Optional[str] = None
+):
+    """Recommend forecast items to restock within a budget (ge=0 turns negative budgets into 422)"""
+    # Mirror the POST handler: an unknown warehouse is a client error, not an empty result
+    if warehouse and warehouse != 'all' and warehouse not in LEAD_TIME_DAYS:
+        raise HTTPException(status_code=400, detail=f"Unknown warehouse: {warehouse}")
+    return build_restock_recommendations(budget, warehouse)
+
+@app.get("/api/restock-orders", response_model=List[RestockOrder])
+def get_restock_orders(warehouse: Optional[str] = None):
+    """List restock orders submitted during this server run"""
+    return apply_filters(restock_orders, warehouse)
+
+@app.post("/api/restock-orders", response_model=RestockOrder, status_code=201)
+def create_restock_order(request: CreateRestockOrderRequest):
+    """Submit a restock order; lead time is fixed per destination warehouse"""
+    lead_time = LEAD_TIME_DAYS.get(request.warehouse)
+    if lead_time is None:
+        raise HTTPException(status_code=400, detail=f"Unknown warehouse: {request.warehouse}")
+
+    items = []
+    for line in request.items:
+        # Match on SKU and warehouse so the price comes from the destination's own inventory
+        # record; the client never supplies prices.
+        inventory_item = next(
+            (i for i in inventory_items if i['sku'] == line.sku and i['warehouse'] == request.warehouse),
+            None
+        )
+        if not inventory_item:
+            raise HTTPException(status_code=400, detail=f"SKU {line.sku} not found in {request.warehouse}")
+        unit_price = inventory_item['unit_cost']
+        items.append(RestockOrderItem(
+            sku=line.sku,
+            name=inventory_item['name'],
+            quantity=line.quantity,
+            unit_price=unit_price,
+            line_cost=round(line.quantity * unit_price, 2)
+        ))
+
+    now = datetime.now().replace(microsecond=0)
+    sequence = len(restock_orders) + 1
+    order = RestockOrder(
+        id=str(sequence),
+        order_number=f"RST-{now.year}-{sequence:04d}",
+        customer=RESTOCK_CUSTOMER,
+        warehouse=request.warehouse,
+        items=items,
+        status="Submitted",
+        order_date=now.isoformat(),
+        lead_time_days=lead_time,
+        expected_delivery=(now + timedelta(days=lead_time)).isoformat(),
+        total_value=round(sum(i.line_cost for i in items), 2)
+    )
+    # Stored as a plain dict so apply_filters can treat it like the JSON-loaded orders.
+    # Deliberately NOT added to `orders`, so dashboard totals and status filters are unaffected.
+    restock_orders.append(order.model_dump())
+    return order
 
 @app.get("/api/backlog", response_model=List[BacklogItem])
 def get_backlog():

@@ -6,6 +6,7 @@ export default {
     orders: '注文',
     finance: '財務',
     demandForecast: '需要予測',
+    restocking: '補充',
     companyName: '触媒コンポーネンツ',
     subtitle: '在庫管理システム'
   },
@@ -105,6 +106,8 @@ export default {
   orders: {
     title: '注文',
     description: '顧客注文の表示と管理',
+    submittedOrders: '送信済み補充注文',
+    noSubmittedOrders: '送信済みの補充注文はまだありません。',
     allOrders: 'すべての注文',
     totalOrders: '総注文数',
     totalRevenue: '総収益',
@@ -125,7 +128,8 @@ export default {
       totalValue: '合計金額',
       status: 'ステータス',
       expectedDelivery: '予定配達日',
-      actualDelivery: '実際の配達日'
+      actualDelivery: '実際の配達日',
+      leadTime: 'リードタイム'
     }
   },
 
@@ -189,6 +193,46 @@ export default {
   },
 
   // Filters
+  // Restocking
+  restocking: {
+    title: '補充',
+    description: '予算を設定し、需要予測に基づく補充推奨を生成します',
+    budget: '利用可能予算',
+    warehouse: '倉庫',
+    allocated: '割当済み',
+    remaining: '残予算',
+    itemsRecommended: '推奨品目数',
+    itemsWithShortfall: '予測未達品目数',
+    leadTime: 'リードタイム',
+    recommendations: '推奨補充ライン',
+    noRecommendations: '現在の予算では補充できる品目がありません。予算を増やしてください。',
+    noShortfall: 'この倉庫では予測対象の全品目が十分に在庫されています。',
+    partialFill: '一部',
+    placeOrder: '発注する',
+    confirmTitle: '補充注文の確認',
+    confirmDescription: '以下の内容を確認してください。{warehouse}倉庫へ発注され、推定リードタイムは{days}日です。',
+    confirm: '注文を確定',
+    submitting: '送信中...',
+    orderSubmitted: '注文{orderNumber}を送信しました。配達予定日は{date}（リードタイム{days}日）です。',
+    viewOrders: '注文ページで確認',
+    submitError: '補充注文の送信に失敗しました',
+    loadError: '推奨の読み込みに失敗しました',
+    table: {
+      sku: 'SKU',
+      item: '品目',
+      category: 'カテゴリ',
+      onHand: '在庫数',
+      forecast: '予測需要',
+      shortfall: '不足数',
+      unitCost: '単価',
+      recommendedQty: '推奨数量',
+      lineCost: '金額',
+      trend: 'トレンド',
+      quantity: '数量',
+      total: '合計'
+    }
+  },
+
   filters: {
     timePeriod: '期間',
     location: '場所',
@@ -204,6 +248,7 @@ export default {
     shipped: '出荷済み',
     processing: '処理中',
     backordered: 'バックオーダー',
+    submitted: '送信済み',
     inStock: '在庫あり',
     lowStock: '在庫僅少',
     adequate: '適量'
@@ -323,11 +368,20 @@ export default {
     search: '検索',
     filter: 'フィルター',
     export: 'エクスポート',
-    items: '件'
+    items: '件',
+    daysCount: '{days}日'
   },
 
   // Product Names
   productNames: {
+    'Industrial Widget Type A': '産業用ウィジェット タイプA',
+    'Steel Bearing Assembly': 'スチールベアリング組立',
+    'High-Temperature Gasket': '高温用ガスケット',
+    'Electric Motor 5HP': '電動モーター 5HP',
+    'Oil Filter Cartridge': 'オイルフィルターカートリッジ',
+    'Pressure Relief Valve': '圧力逃し弁',
+    'Temperature Sensor Module': '温度センサーモジュール',
+    'Logic Controller Board': 'ロジックコントローラー基板',
     'Single Layer PCB Assembly': '単層PCB組立',
     'Dual Layer PCB Assembly': '二層PCB組立',
     'Multi Layer PCB Assembly': '多層PCB組立',
@@ -364,6 +418,7 @@ export default {
 
   // Customer Names
   customerNames: {
+    'Internal Restock': '社内補充',
     'MegaCorp Industries': 'メガコープ工業',
     'Elite Systems Corp': 'エリートシステムズ',
     'Horizon Technologies': 'ホライズン技術',
